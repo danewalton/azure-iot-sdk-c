@@ -149,6 +149,7 @@ install(FILES
 )
 # Install target and set target include directory
 install(TARGETS hsm_security_client
+    EXPORT azure_prov_sdkTargets
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -193,6 +194,7 @@ install(FILES
 )
 # Install target and set target include directory
 install(TARGETS prov_auth_client
+    EXPORT azure_prov_sdkTargets
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -230,6 +232,7 @@ if(${use_prov_client} OR (${use_prov_client_core} AND ${run_e2e_tests}))
     )
     # Install target
     install(TARGETS prov_device_ll_client
+        EXPORT azure_prov_sdkTargets
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -292,6 +295,7 @@ if(${use_prov_client} OR (${use_prov_client_core} AND ${run_e2e_tests}))
             )
         endif()
         install(TARGETS prov_device_client_dll
+            EXPORT azure_prov_sdkTargets
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -315,7 +319,7 @@ if(${use_prov_client} OR (${use_prov_client_core} AND ${run_e2e_tests}))
 
         target_link_libraries(prov_http_transport
             PUBLIC
-                uhttp
+                $<BUILD_INTERFACE:uhttp>
                 aziotsharedutil
                 parson::parson
         )
@@ -331,6 +335,7 @@ if(${use_prov_client} OR (${use_prov_client_core} AND ${run_e2e_tests}))
           DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azure_prov_client/internal
         )
         install(TARGETS prov_http_transport
+            EXPORT azure_prov_sdkTargets
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -399,6 +404,7 @@ if(${use_prov_client} OR (${use_prov_client_core} AND ${run_e2e_tests}))
         )
         # Install both targets
         install(TARGETS prov_amqp_transport prov_amqp_ws_transport
+            EXPORT azure_prov_sdkTargets
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -459,6 +465,7 @@ if(${use_prov_client} OR (${use_prov_client_core} AND ${run_e2e_tests}))
         )
         # Install both targets
         install(TARGETS prov_mqtt_transport prov_mqtt_ws_transport
+            EXPORT azure_prov_sdkTargets
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -476,17 +483,23 @@ if (${use_prov_client} AND (NOT ${skip_samples}))
     add_subdirectory(tools)
 endif ()
 
+install(
+    EXPORT azure_prov_sdkTargets
+    FILE "azure_prov_sdkTargets.cmake"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/azure_prov_sdk"
+)
+
 if(${use_installed_dependencies})
 
     # Install Provisioning libs
     set(package_location "${CMAKE_INSTALL_LIBDIR}/cmake/azure_prov_sdk")
 
-    install(TARGETS ${provisioning_libs} EXPORT azure_prov_sdksTargets
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azureiot
-    )
+    # install(TARGETS ${provisioning_libs} EXPORT azure_prov_sdksTargets
+    #     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    #     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    #     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    #     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azureiot
+    # )
     install(FILES ${provisioning_headers} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azure_prov_client)
 
     include(CMakePackageConfigHelpers)
@@ -502,12 +515,12 @@ if(${use_installed_dependencies})
         COPYONLY
     )
 
-    install(EXPORT azure_prov_sdksTargets
-        FILE
-            "${PROJECT_NAME}Targets.cmake"
-        DESTINATION
-            ${package_location}
-    )
+    # install(EXPORT azure_prov_sdksTargets
+    #     FILE
+    #         "${PROJECT_NAME}Targets.cmake"
+    #     DESTINATION
+    #         ${package_location}
+    # )
 
     install(
         FILES
