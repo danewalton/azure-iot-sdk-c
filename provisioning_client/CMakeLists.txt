@@ -19,13 +19,9 @@ set(AUTH_CLIENT_H_FILES
     ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/iothub_auth_client.h
     ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/prov_auth_client.h
     ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/iothub_security_factory.h
-    )
+)
 
 set(HSM_CLIENT_LIBRARY)
-
-set(HSM_CLIENT_H_FILES
-    ${CMAKE_CURRENT_LIST_DIR}/adapters/hsm_client_data.h
-)
 
 if (${hsm_type_custom})
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHSM_AUTH_TYPE_CUSTOM")
@@ -65,10 +61,6 @@ elseif (${use_prov_client})
         add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/tests/common_prov_e2e/prov_hsm)
     else ()
         if (${hsm_type_x509})
-            # Using x509
-            set(HSM_CLIENT_H_FILES ${HSM_CLIENT_H_FILES}
-                ${CMAKE_CURRENT_LIST_DIR}/adapters/hsm_client_riot.h)
-
             # Include the riot directories
             include_directories(${CMAKE_CURRENT_LIST_DIR}/deps/RIoT/Simulation/DICE)
             include_directories(${CMAKE_CURRENT_LIST_DIR}/deps/RIoT/Simulation/RIoT/Core)
@@ -77,26 +69,15 @@ elseif (${use_prov_client})
 
         if (${hsm_type_sastoken})
             # Using Sas Token
-            set(HSM_CLIENT_H_FILES ${HSM_CLIENT_H_FILES}
-                ${CMAKE_CURRENT_LIST_DIR}/adapters/hsm_client_tpm.h)
-
             # TODO: Remove once utpm CMake is updated
             include_directories(${TPM_C_INC_FOLDER})
         endif ()
-
-        if (${hsm_type_symm_key})
-            set(HSM_CLIENT_H_FILES ${HSM_CLIENT_H_FILES} 
-                ${CMAKE_CURRENT_LIST_DIR}/adapters/hsm_client_key.h)
-        endif()
     endif ()
 endif ()
 
 if (${hsm_type_edge_module})
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DHSM_TYPE_HTTP_EDGE")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DHSM_TYPE_HTTP_EDGE")
-
-    set(HSM_CLIENT_H_FILES ${HSM_CLIENT_H_FILES}
-        ${CMAKE_CURRENT_LIST_DIR}/adapters/hsm_client_http_edge.h)
 endif()
 
 if(${use_openssl})
@@ -108,8 +89,7 @@ set(PROV_DEVICE_CLIENT_SOURCE_H_FILES
     ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_device_client.h)
 
 set(PROV_DEVICE_LL_CLEINT_SOURCE_H_FILES
-    ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_client_const.h
-    ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_device_ll_client.h)
+)
 
 set(DEV_AUTH_MODULES_CLIENT_INC_FOLDER "${CMAKE_CURRENT_LIST_DIR}/inc" "${CMAKE_CURRENT_LIST_DIR}/inc/internal" CACHE INTERNAL "this is what needs to be included if using iothub_client lib" FORCE)
 
@@ -122,6 +102,8 @@ if(WIN32)
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 ENDIF(WIN32)
 
+######################### HSM Security Client #########################
+
 # Create the HSM security client
 add_library(hsm_security_client
     ${CMAKE_CURRENT_LIST_DIR}/adapters/hsm_client_data.c
@@ -131,13 +113,13 @@ add_library(hsm_security_client
     $<$<BOOL:${hsm_type_x509}>:${CMAKE_CURRENT_LIST_DIR}/adapters/hsm_client_riot.c>
 )
 
+setSdkTargetBuildProperties(hsm_security_client)
+
 target_include_directories(hsm_security_client
     PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/adapters>
-        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/azureiot/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/adapters>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/azureiot>
 )
-
-setSdkTargetBuildProperties(hsm_security_client)
 
 # TODO: Remove once uhttp target has the includes
 include_directories(${UHTTP_C_INC_FOLDER})
@@ -156,8 +138,26 @@ target_link_libraries(hsm_security_client
         $<$<BOOL:${WIN32}>:Tbs>
 )
 
+# Install header files
+install(FILES
+    ${CMAKE_CURRENT_LIST_DIR}/adapters/hsm_client_data.h
+    ${CMAKE_CURRENT_LIST_DIR}/adapters/hsm_client_http_edge.h
+    ${CMAKE_CURRENT_LIST_DIR}/adapters/hsm_client_key.h
+    ${CMAKE_CURRENT_LIST_DIR}/adapters/hsm_client_riot.h
+    ${CMAKE_CURRENT_LIST_DIR}/adapters/hsm_client_tpm.h
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+# Install target and set target include directory
+install(TARGETS hsm_security_client
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+######################### Provisioning Auth Client #########################
+
 set(provisioning_libs ${provisioning_libs} hsm_security_client)
-set(provisioning_headers ${provisioning_headers} ${HSM_CLIENT_H_FILES})
 
 # Create the provisioning auth client
 add_library(prov_auth_client
@@ -168,31 +168,52 @@ add_library(prov_auth_client
 )
 target_include_directories(prov_auth_client
     PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
-        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/azureiot/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/inc>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/azureiot>
 )
 target_link_libraries(prov_auth_client
     PUBLIC
         aziotsharedutil
         hsm_security_client
 )
+
 setSdkTargetBuildProperties(prov_auth_client)
-set(provisioning_libs ${provisioning_libs} prov_auth_client)
-set(provisioning_headers ${provisioning_headers} ${AUTH_CLIENT_H_FILES})
+
+# Install public header files
+install(FILES
+    ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/iothub_security_factory.h
+    ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_security_factory.h
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azure_prov_client
+)
+# Install private header files
+install(FILES
+    ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/iothub_auth_client.h
+    ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/prov_auth_client.h
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azure_prov_client/internal
+)
+# Install target and set target include directory
+install(TARGETS prov_auth_client
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azureiot
+)
+
+##################################################################################
 
 if(${use_prov_client} OR (${use_prov_client_core} AND ${run_e2e_tests}))
-    # Provisioning LL client
+
+    ######################### Provisioning LL Client #########################
     add_library(prov_device_ll_client
         ${CMAKE_CURRENT_LIST_DIR}/src/prov_device_ll_client.c
     )
     target_include_directories(prov_device_ll_client
         PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
-        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/azureiot/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/inc>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/azureiot>
     )
+
     setSdkTargetBuildProperties(prov_device_ll_client)
-    set(provisioning_libs ${provisioning_libs} prov_device_ll_client)
-    set(provisioning_headers ${provisioning_headers} ${PROV_DEVICE_LL_CLEINT_SOURCE_H_FILES})
 
     target_link_libraries(prov_device_ll_client
         PUBLIC
@@ -201,15 +222,28 @@ if(${use_prov_client} OR (${use_prov_client_core} AND ${run_e2e_tests}))
             hsm_security_client
             parson::parson
     )
+    # Install public headers
+    install(FILES
+        ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_client_const.h
+        ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_device_ll_client.h
+      DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azure_prov_client
+    )
+    # Install target
+    install(TARGETS prov_device_ll_client
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azureiot
+    )
 
-    # Convenience provisioning client
+    ######################### Provisioning Convenience Client #########################
     add_library(prov_device_client 
         ${CMAKE_CURRENT_LIST_DIR}/src/prov_device_client.c
     )
     target_include_directories(prov_device_client
         PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
-        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/azureiot/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/inc>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/azureiot>
     )
 
     setSdkTargetBuildProperties(prov_device_client)
@@ -222,6 +256,7 @@ if(${use_prov_client} OR (${use_prov_client_core} AND ${run_e2e_tests}))
     set(provisioning_headers ${provisioning_headers} ${PROV_DEVICE_CLIENT_SOURCE_H_FILES})
 
     if (${build_as_dynamic})
+        ######################### Provisioning Convenience Client DLL #########################
         add_library(prov_device_client_dll
             SHARED
                 ${CMAKE_CURRENT_LIST_DIR}/src/prov_device_client.c
@@ -229,8 +264,8 @@ if(${use_prov_client} OR (${use_prov_client_core} AND ${run_e2e_tests}))
         )
         target_include_directories(prov_device_client_dll
             PUBLIC
-                $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
-                $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/azureiot/include>
+                $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/inc>
+                $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/azureiot>
         )
 
         target_link_libraries(prov_device_client_dll
@@ -256,27 +291,27 @@ if(${use_prov_client} OR (${use_prov_client_core} AND ${run_e2e_tests}))
                 "-Wl,--exclude-libs,libparson.a"
             )
         endif()
-        set(provisioning_libs ${provisioning_libs} prov_device_client_dll)
+        install(TARGETS prov_device_client_dll
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azureiot
+        )
     endif()
 
     if (${use_http})
-        set(PROV_HTTP_CLIENT_H_FILES
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_transport.h
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/prov_transport_private.h
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_transport_http_client.h)
-        set(PROV_HTTP_CLIENT_C_FILES
-            ${CMAKE_CURRENT_LIST_DIR}/src/prov_transport_http_client.c)
+        ######################### Provisioning HTTP Transport #########################
+        add_library(prov_http_transport 
+            ${CMAKE_CURRENT_LIST_DIR}/src/prov_transport_http_client.c
+        )
 
-        # Provisioning http Transport Client library
-        add_library(prov_http_transport ${PROV_HTTP_CLIENT_C_FILES} ${PROV_HTTP_CLIENT_H_FILES})
         setSdkTargetBuildProperties(prov_http_transport)
+
         target_include_directories(prov_http_transport
             PUBLIC
-                $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
-                $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/azureiot/include>
+                $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/inc>
+                $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/azureiot>
         )
-        set(provisioning_libs ${provisioning_libs} prov_http_transport)
-        set(provisioning_headers ${provisioning_headers} ${PROV_HTTP_CLIENT_H_FILES})
 
         target_link_libraries(prov_http_transport
             PUBLIC
@@ -284,32 +319,37 @@ if(${use_prov_client} OR (${use_prov_client_core} AND ${run_e2e_tests}))
                 aziotsharedutil
                 parson::parson
         )
+        # Install public headers
+        install(FILES
+            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_transport.h
+            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_transport_http_client.h
+          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azure_prov_client
+        )
+        # Install private headers
+        install(FILES
+            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/prov_transport_private.h
+          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azure_prov_client/internal
+        )
+        install(TARGETS prov_http_transport
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azureiot
+        )
     endif()
 
     if (${use_amqp})
+        ######################### Provisioning AMQP Transport #########################
         include_directories(${UAMQP_INCLUDES} ${UAMQP_INC_FOLDER})
-
-        set(PROV_AMQP_CLIENT_H_FILES
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_transport.h
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_transport_amqp_client.h
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/prov_transport_amqp_common.h
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/prov_transport_private.h
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/prov_sasl_tpm.h)
-
-        set(PROV_AMQP_WS_CLIENT_H_FILES
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_transport.h
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_transport_amqp_ws_client.h
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/prov_transport_amqp_common.h
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/prov_transport_private.h
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/prov_sasl_tpm.h)
-
-        # Provisioning AMQP Websocket transport
+        # Provisioning AMQP Websocket transport library
         add_library(prov_amqp_ws_transport
             ${CMAKE_CURRENT_LIST_DIR}/src/prov_transport_amqp_ws_client.c
             ${CMAKE_CURRENT_LIST_DIR}/src/prov_transport_amqp_common.c
             ${CMAKE_CURRENT_LIST_DIR}/src/prov_sasl_tpm.c
         )
+
         setSdkTargetBuildProperties(prov_amqp_ws_transport)
+
         target_link_libraries(prov_amqp_ws_transport
             PUBLIC
                 uamqp
@@ -317,11 +357,9 @@ if(${use_prov_client} OR (${use_prov_client_core} AND ${run_e2e_tests}))
         )
         target_include_directories(prov_amqp_ws_transport
             PUBLIC
-                $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
-                $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/azureiot/include>
+                $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/inc>
+                $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/azureiot>
         )
-        set(provisioning_libs ${provisioning_libs} prov_amqp_ws_transport)
-        set(provisioning_headers ${provisioning_headers} ${PROV_AMQP_WS_CLIENT_H_FILES})
 
         # Provisioning AMQP transport library
         add_library(prov_amqp_transport
@@ -329,35 +367,48 @@ if(${use_prov_client} OR (${use_prov_client_core} AND ${run_e2e_tests}))
             ${CMAKE_CURRENT_LIST_DIR}/src/prov_transport_amqp_common.c
             ${CMAKE_CURRENT_LIST_DIR}/src/prov_sasl_tpm.c
         )
+
         setSdkTargetBuildProperties(prov_amqp_transport)
+
         target_link_libraries(prov_amqp_transport
             PUBLIC
                 uamqp
                 aziotsharedutil
         )
+
         target_include_directories(prov_amqp_transport
             PUBLIC
-                $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
-                $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/azureiot/include>
+                $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/inc>
+                $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/azureiot>
         )
-        set(provisioning_libs ${provisioning_libs} prov_amqp_transport)
-        set(provisioning_headers ${provisioning_headers} ${PROV_AMQP_CLIENT_H_FILES})
+
+        # Install public headers
+        install(FILES
+            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_transport.h
+            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_transport_amqp_client.h
+            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_transport_amqp_ws_client.h
+          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azure_prov_client
+        )
+
+        # Install private headers
+        install(FILES
+            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/prov_transport_amqp_common.h
+            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/prov_transport_private.h
+            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/prov_sasl_tpm.h
+          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azure_prov_client/internal
+        )
+        # Install both targets
+        install(TARGETS prov_amqp_transport prov_amqp_ws_transport
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azureiot
+        )
     endif()
 
     if (${use_mqtt})
+        ######################### Provisioning MQTT Transport #########################
         include_directories(${MQTT_INC_FOLDER})
-
-        set(PROV_MQTT_CLIENT_H_FILES
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_transport.h
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_transport_mqtt_client.h
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/prov_transport_private.h
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/prov_transport_mqtt_common.h)
-
-        set(PROV_MQTT_WS_CLIENT_H_FILES
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_transport.h
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_transport_mqtt_ws_client.h
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/prov_transport_private.h
-            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/prov_transport_mqtt_common.h)
 
         # Provisioning MQTT Websocket transport library
         add_library(prov_mqtt_ws_transport
@@ -372,11 +423,9 @@ if(${use_prov_client} OR (${use_prov_client_core} AND ${run_e2e_tests}))
         )
         target_include_directories(prov_mqtt_ws_transport
             PUBLIC
-                $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
-                $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/azureiot/include>
+                $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/inc>
+                $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/azureiot>
         )
-        set(provisioning_libs ${provisioning_libs} prov_mqtt_ws_transport)
-        set(provisioning_headers ${provisioning_headers} ${PROV_MQTT_WS_CLIENT_H_FILES})
 
         # Provisioning MQTT transport library
         add_library(prov_mqtt_transport
@@ -391,11 +440,30 @@ if(${use_prov_client} OR (${use_prov_client_core} AND ${run_e2e_tests}))
         )
         target_include_directories(prov_mqtt_transport
             PUBLIC
-                $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
-                $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/azureiot/include>
+                $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/inc>
+                $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/azureiot>
         )
-        set(provisioning_libs ${provisioning_libs} prov_mqtt_transport)
-        set(provisioning_headers ${provisioning_headers} ${PROV_MQTT_CLIENT_H_FILES})
+
+        # Install public headers
+        install(FILES
+            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_transport.h
+            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_transport_mqtt_client.h
+            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/prov_transport_mqtt_ws_client.h
+          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azure_prov_client
+        )
+        # Install private headers
+        install(FILES
+            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/prov_transport_private.h
+            ${CMAKE_CURRENT_LIST_DIR}/inc/azure_prov_client/internal/prov_transport_mqtt_common.h
+          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azure_prov_client/internal
+        )
+        # Install both targets
+        install(TARGETS prov_mqtt_transport prov_mqtt_ws_transport
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azureiot
+        )
     endif()
 endif()
 
@@ -413,17 +481,13 @@ if(${use_installed_dependencies})
     # Install Provisioning libs
     set(package_location "${CMAKE_INSTALL_LIBDIR}/cmake/azure_prov_sdk")
 
-    if(NOT DEFINED CMAKE_INSTALL_LIBDIR)
-        set(CMAKE_INSTALL_LIBDIR "lib")
-    endif()
-
     install(TARGETS ${provisioning_libs} EXPORT azure_prov_sdksTargets
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azureiot
     )
-    install(FILES ${provisioning_headers} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azureiot/azure_prov_client)
+    install(FILES ${provisioning_headers} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azure_prov_client)
 
     include(CMakePackageConfigHelpers)
 
@@ -457,13 +521,4 @@ else()
     if(NOT DEFINED CMAKE_INSTALL_LIBDIR)
         set(CMAKE_INSTALL_LIBDIR "lib")
     endif()
-
-    install(FILES ${provisioning_headers}
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/azure_prov_client)
-    install(TARGETS ${provisioning_libs}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    )
 endif()
