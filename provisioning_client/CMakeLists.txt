@@ -222,7 +222,7 @@ if(${use_prov_client} OR (${use_prov_client_core} AND ${run_e2e_tests}))
     )
 
     ######################### Provisioning Convenience Client #########################
-    add_library(prov_device_client 
+    add_library(prov_device_client
         ${CMAKE_CURRENT_LIST_DIR}/src/prov_device_client.c
     )
     target_include_directories(prov_device_client
