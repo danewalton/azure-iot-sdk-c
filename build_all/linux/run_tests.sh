@@ -20,7 +20,7 @@ elif [[ "$RUN_VALGRIND" != "" ]]; then
 fi
 
 # Only for testing E2E behaviour !!! 
-TEST_CORES=8
+TEST_CORES=16
 
 # Refresh dynamic libs to link to
 sudo ldconfig
