@@ -4,14 +4,21 @@
 cmake_minimum_required (VERSION 3.5)
 project(azure_iot_sdks)
 
-include("${CMAKE_CURRENT_LIST_DIR}/configs/azure_iot_sdksFunctions.cmake")
+########## Enable CMake Features ##########
+# Use solution folders.
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+# Set CMAKE_INSTALL_LIBDIR if not defined
+include(GNUInstallDirs)
+include (CTest)
 
-getIoTSDKVersion()
-message("IoT Client SDK Version = ${IOT_SDK_VERSION}")
+include("${CMAKE_CURRENT_LIST_DIR}/configs/azure_iot_sdksFunctions.cmake")
 
 if (POLICY CMP0042)
     cmake_policy(SET CMP0042 NEW)
 endif()
+
+getIoTSDKVersion()
+message(STATUS "IoT Client SDK Version = ${IOT_SDK_VERSION}")
 
 #
 #making a global variable to know if we are on linux, windows, or macosx.
@@ -28,24 +35,12 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     add_definitions(-DMACOSX)
 endif()
 
-# Set CMAKE_INSTALL_LIBDIR if not defined
-include(GNUInstallDirs)
-
-include (CTest)
-
 IF(WIN32)
     # windows needs this define
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 endif()
 
-set(hsm_type_x509 OFF CACHE BOOL "x509 type of hsm used with the Provisioning client")
-set(hsm_type_sastoken OFF CACHE BOOL "tpm type of hsm used with the Provisioning client")
-set(hsm_type_symm_key OFF CACHE BOOL "Symmetric key type of hsm used with the Provisioning client")
-set(hsm_type_custom OFF CACHE BOOL "hsm type of custom used with the Provisioning client")
-set(hsm_custom_lib "" CACHE STRING "Full path to custom HSM repo library")
-set(run_sfc_tests OFF CACHE BOOL "setup the Service Fault tests")
-
-# the following variables are project-wide and can be used with cmake-gui
+########### CMake Options ###########
 option(use_amqp "set use_amqp to ON if amqp is to be used, set to OFF to not use amqp" ON)
 option(use_http "set use_http to ON if http is to be used, set to OFF to not use http" ON)
 option(use_mqtt "set use_mqtt to ON if mqtt is to be used, set to OFF to not use mqtt" ON)
@@ -66,7 +61,35 @@ option(use_edge_modules "Enable support for running modules against Azure IoT Ed
 option(use_custom_heap "use externally defined heap functions instead of the malloc family" OFF)
 option(use_cppunittest "set use_cppunittest to ON to build CppUnitTest tests on Windows (default is OFF)" OFF)
 option(warnings_as_errors  "enable strict compiler warnings-as-errors" ON)
+option(hsm_type_x509 "x509 type of hsm used with the Provisioning client" OFF)
+option(hsm_type_sastoken "tpm type of hsm used with the Provisioning client" OFF)
+option(hsm_type_symm_key "Symmetric key type of hsm used with the Provisioning client" OFF)
+option(hsm_type_custom "hsm type of custom used with the Provisioning client" OFF)
+option(run_sfc_tests "setup the Service Fault tests" OFF)
+option(use_mbedtls "set use_mbedtls to ON to use mbedtls." OFF)
+option(use_bearssl "set use_bearssl to ON to use bearssl." OFF)
+option(use_wolfssl "set use_wolfssl to ON to use wolfssl." OFF)
+option(use_azure_cloud_rsa_cert "set use_azure_cloud_rsa_cert to ON if the Azure Cloud RSA certs are to be used for samples, set to OFF to not use it" OFF)
+option(use_azure_cloud_ecc_cert "set use_azure_cloud_ecc_cert to ON if the Azure Cloud ECC certs are to be used for samples, set to OFF to not use it" OFF)
+option(use_microsoftazure_de_cert "set use_microsoftazure_de_cert to ON if the MicrosoftAzure DE cert is to be used for samples, set to OFF to not use it" OFF)
+option(use_portal_azure_cn_cert "set use_portal_azure_cn_cert to ON if the Portal Azure CN cert is to be used for samples, set to OFF to not use it" OFF)
 
+########## Conditional Options set ##########
+if (WIN32 OR MACOSX)
+    option(use_openssl "set use_openssl to ON to use OpenSSL." OFF)
+else()
+    option(use_openssl "set use_openssl to ON to use OpenSSL." ON)
+endif()
+
+# OpenSSL samples on Windows need to have a trusted cert set
+if ((WIN32 AND ${use_openssl}) OR ${use_wolfssl} OR ${use_mbedtls} OR ${use_bearssl})
+    option(use_sample_trusted_cert "Set flag in samples to use SDK's built-in CA as TrustedCerts" ON)
+else()
+    option(use_sample_trusted_cert "Set flag in samples to use SDK's built-in CA as TrustedCerts" OFF)
+endif()
+
+########## String Options ##########
+set(hsm_custom_lib "" CACHE STRING "Full path to custom HSM repo library")
 set(compileOption_C "" CACHE STRING "passes a string to the command line of the C compiler")
 set(compileOption_CXX "" CACHE STRING "passes a string to the command line of the C++ compiler")
 set(linkerOption "" CACHE STRING "passes a string to the shared and exe linker options of the C compiler")
@@ -90,37 +113,7 @@ if(${use_custom_heap})
     add_definitions(-DGB_USE_CUSTOM_HEAP)
 endif()
 
-if (NOT ${use_amqp} AND NOT ${use_http} AND NOT ${use_mqtt})
-    message(FATAL_ERROR "CMAKE Failure: AMQP, HTTP & MQTT are all disable, iothub client must have one protocol enabled")
-endif()
-
-if (XCODE AND ${use_prov_client})
-    # The TPM module is not available on Mac, and Mac's <string.h> and <unistd.h> files collide as well
-    message(FATAL_ERROR "Provisioning client is not supported on Mac")
-endif()
-
-if (WIN32 OR MACOSX)
-    option(use_openssl "set use_openssl to ON to use OpenSSL." OFF)
-else()
-    option(use_openssl "set use_openssl to ON to use OpenSSL." ON)
-endif()
-option(use_mbedtls "set use_mbedtls to ON to use mbedtls." OFF)
-option(use_bearssl "set use_bearssl to ON to use bearssl." OFF)
-option(use_wolfssl "set use_wolfssl to ON to use wolfssl." OFF)
-
-# openssl samples on Windows need to have a trusted cert set
-if ((WIN32 AND ${use_openssl}) OR ${use_wolfssl} OR ${use_mbedtls} OR ${use_bearssl})
-    option(use_sample_trusted_cert "Set flag in samples to use SDK's built-in CA as TrustedCerts" ON)
-else()
-    option(use_sample_trusted_cert "Set flag in samples to use SDK's built-in CA as TrustedCerts" OFF)
-endif()
-
-# Enable specific certs
-option(use_azure_cloud_rsa_cert "set use_azure_cloud_rsa_cert to ON if the Azure Cloud RSA certs are to be used for samples, set to OFF to not use it" OFF)
-option(use_azure_cloud_ecc_cert "set use_azure_cloud_ecc_cert to ON if the Azure Cloud ECC certs are to be used for samples, set to OFF to not use it" OFF)
-option(use_microsoftazure_de_cert "set use_microsoftazure_de_cert to ON if the MicrosoftAzure DE cert is to be used for samples, set to OFF to not use it" OFF)
-option(use_portal_azure_cn_cert "set use_portal_azure_cn_cert to ON if the Portal Azure CN cert is to be used for samples, set to OFF to not use it" OFF)
-
+########## Enable Specific Root Certs ##########
 if (${use_azure_cloud_rsa_cert})
     add_definitions(-DUSE_AZURE_CLOUD_RSA_CERT)
 endif()
@@ -137,6 +130,12 @@ if (${use_portal_azure_cn_cert})
     add_definitions(-DUSE_PORTAL_AZURE_CN_CERT)
 endif()
 
+########## Set Provisioning Features ON/OFF ##########
+if (XCODE AND ${use_prov_client})
+    # The TPM module is not available on Mac, and Mac's <string.h> and <unistd.h> files collide as well
+    message(FATAL_ERROR "Provisioning client is not supported on Mac.")
+endif()
+
 # Enable IoT SDK to act as a module for Edge
 if(${use_edge_modules})
     set(use_prov_client_core ON)
@@ -146,7 +145,7 @@ if(${use_edge_modules})
     set(hsm_type_edge_module ON)
 endif()
 
-# Set Provisioning Information.  This will also setup appropriate HSM
+# Set Provisioning Information. This will also setup appropriate HSM
 if (${use_prov_client})
     set(use_prov_client_core ON)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_PROV_MODULE_FULL")
@@ -168,12 +167,16 @@ if (${use_prov_client_core})
     message(STATUS "Provisioning SDK Version = ${PROV_SDK_VERSION}")
 endif()
 
-# check for conflicting options
+########## Check for conflicting options ##########
 if (NOT ${use_http})
     MESSAGE( "Setting dont_use_uploadtoblob to ON because use_http is OFF")
-    set(dont_use_uploadtoblob "ON")
+    set(dont_use_uploadtoblob ON)
     MESSAGE( STATUS "use_http:         " ${use_http} )
     MESSAGE( STATUS "dont_use_uploadtoblob:         " ${dont_use_uploadtoblob} )
+endif()
+
+if (NOT ${use_amqp} AND NOT ${use_http} AND NOT ${use_mqtt})
+    message(FATAL_ERROR "CMAKE Failure: AMQP, HTTP & MQTT are all disabled, IoT Hub Client must have one protocol enabled.")
 endif()
 
 if (${dont_use_uploadtoblob})
@@ -182,49 +185,6 @@ endif()
 
 if (${no_logging})
     add_definitions(-DNO_LOGGING)
-endif()
-
-# Use solution folders.
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-
-# build the parson library for json parsing
-if(NOT ${use_installed_dependencies})
-  add_library(parson
-      ${CMAKE_CURRENT_LIST_DIR}/deps/parson/parson.c
-      ${CMAKE_CURRENT_LIST_DIR}/deps/parson/parson.h
-  )
-  add_library(parson::parson ALIAS parson)
-  if (MSVC)
-      set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/deps/parson/parson.c PROPERTIES COMPILE_FLAGS "/wd4244 /wd4232")
-  endif()
-
-  target_include_directories(parson PUBLIC
-      $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/deps/parson>
-      $<INSTALL_INTERFACE:include>
-  )
-  set_target_properties(parson PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_LIST_DIR}/deps/parson/parson.h)
-
-  install(
-      TARGETS parson
-      EXPORT parsonTargets
-      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-      LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-      PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-  )
-  install(
-      EXPORT parsonTargets
-      FILE parsonConfig.cmake
-      NAMESPACE parson::
-      DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/parson
-  )
-else()
-  find_package(parson REQUIRED CONFIG)
-endif()
-
-if (IN_OPENWRT)
-    ADD_DEFINITIONS("$ENV{TARGET_LDFLAGS}" "$ENV{TARGET_CPPFLAGS}" "$ENV{TARGET_CFLAGS}")
-    INCLUDE_DIRECTORIES("$ENV{TOOLCHAIN_DIR}/usr/include" "$ENV{TARGET_LDFLAGS}" "$ENV{TARGET_CPPFLAGS}" "$ENV{TARGET_CFLAGS}")
 endif()
 
 if (LINUX)
@@ -250,8 +210,6 @@ if (NOT "${linkerOption}" STREQUAL "")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${linkerOption}")
 endif()
 
-include("configs/azure_iot_sdksFunctions.cmake")
-
 # do not add or build any tests of the dependencies
 set(original_run_e2e_tests ${run_e2e_tests})
 set(original_run_unittests ${run_unittests})
@@ -261,45 +219,49 @@ set(run_e2e_tests OFF)
 set(run_unittests OFF)
 set(skip_samples ON)
 
-if (NOT ${use_installed_dependencies})
-    if (NOT TARGET azure_macro_utils_c AND EXISTS "${CMAKE_CURRENT_LIST_DIR}/deps/azure-macro-utils-c/CMakeLists.txt")
-        add_subdirectory(deps/azure-macro-utils-c)
-    endif()
+########## Add dependencies ##########
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/deps)
 
-    if (${original_run_e2e_tests} OR ${original_run_unittests} OR ${run_sfc_tests})
-        if (NOT TARGET testrunnerswitcher)
-            add_subdirectory(deps/azure-c-testrunnerswitcher)
-        endif()
-        if (NOT TARGET ctest)
-            # Get the repo if it's not there
-            add_subdirectory(deps/azure-ctest)
-        endif()
-        enable_testing()
-    endif()
+########## Globally include macro utils and umock ##########
+include_directories(${MACRO_UTILS_INC_FOLDER})
+include_directories(${UMOCK_C_INC_FOLDER})
+if (IN_OPENWRT)
+    add_definitions("$ENV{TARGET_LDFLAGS}" "$ENV{TARGET_CPPFLAGS}" "$ENV{TARGET_CFLAGS}")
+    include_directories("$ENV{TOOLCHAIN_DIR}/usr/include" "$ENV{TARGET_LDFLAGS}" "$ENV{TARGET_CPPFLAGS}" "$ENV{TARGET_CFLAGS}")
+endif()
 
-
-    if (NOT TARGET umock_c)
-        # Get the repo if it's not there
-        add_subdirectory(deps/umock-c)
-    endif()
-
-else()
-    if (NOT azure_macro_utils_cFOUND)
-        find_package(azure_macro_utils_c REQUIRED CONFIG)
+if(${use_installed_dependencies})
+    if (NOT azure_c_shared_utility_FOUND)
+        find_package(azure_c_shared_utility REQUIRED CONFIG)
     endif ()
-    if (NOT umock_cFOUND)
-        find_package(umock_c REQUIRED CONFIG)
+    
+    if (${use_amqp})
+        if (NOT uamqp_FOUND)
+            find_package(uamqp REQUIRED CONFIG)
+        endif ()
+    endif ()
+
+    if (${use_mqtt})
+        if (NOT umqtt_FOUND)
+            find_package(umqtt REQUIRED CONFIG)
+        endif ()
+    endif ()
+else ()
+    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/c-utility)
+
+    if (${use_amqp})
+        add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/uamqp)
+    endif ()
+
+    if (${use_mqtt})
+        add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/umqtt)
     endif ()
 endif()
 
-include_directories(${MACRO_UTILS_INC_FOLDER})
-include_directories(${UMOCK_C_INC_FOLDER})
-
-include("dependencies.cmake")
 if (${original_run_e2e_tests} OR ${original_run_unittests} OR ${run_sfc_tests})
     # Used for serializer
-    add_subdirectory("${SHARED_UTIL_FOLDER}/testtools/sal")
-    add_subdirectory("${SHARED_UTIL_FOLDER}/testtools/micromock")
+    add_subdirectory(${SHARED_UTIL_FOLDER}/testtools/sal)
+    add_subdirectory(${SHARED_UTIL_FOLDER}/testtools/micromock)
 endif()
 
 if (${original_run_e2e_tests} OR ${original_run_unittests} OR ${run_sfc_tests})
@@ -346,34 +308,7 @@ if (NOT DEFINED ARCHITECTURE OR ARCHITECTURE STREQUAL "")
     set(ARCHITECTURE "GENERIC")
 endif()
 
-message("iothub architecture: ${ARCHITECTURE}")
-
-macro(compileAsC99)
-    if (CMAKE_VERSION VERSION_LESS "3.1")
-        if (CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "Clang")
-            set (CMAKE_C_FLAGS "--std=c99 ${CMAKE_C_FLAGS}")
-            if (NOT IN_OPENWRT)
-                set (CMAKE_CXX_FLAGS "--std=c++11 ${CMAKE_CXX_FLAGS}")
-            endif()
-        endif()
-    else()
-        set (CMAKE_C_STANDARD 99)
-        set (CMAKE_CXX_STANDARD 11)
-    endif()
-endmacro(compileAsC99)
-
-macro(compileAsC11)
-    if (CMAKE_VERSION VERSION_LESS "3.1")
-        if (CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "Clang")
-            set (CMAKE_C_FLAGS "--std=c11 ${CMAKE_C_FLAGS}")
-            set (CMAKE_C_FLAGS "-D_POSIX_C_SOURCE=200112L ${CMAKE_C_FLAGS}")
-            set (CMAKE_CXX_FLAGS "--std=c++11 ${CMAKE_CXX_FLAGS}")
-        endif()
-    else()
-        set (CMAKE_C_STANDARD 11)
-        set (CMAKE_CXX_STANDARD 11)
-    endif()
-endmacro(compileAsC11)
+message(STATUS "IoT Hub Architecture: ${ARCHITECTURE}")
 
 if (WIN32)
     set(LOCK_C_FILE ${SHARED_UTIL_ADAPTER_FOLDER}/lock_win32.c)
